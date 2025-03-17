@@ -9,7 +9,6 @@ import (
 
 // GetChainHead fetches the current chain head block number
 func GetChainHead(ctx context.Context, rpcURL string) (int64, error) {
-	fmt.Println("Trying to connect to RPC URL:", rpcURL)
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect to Ethereum client: %w", err)

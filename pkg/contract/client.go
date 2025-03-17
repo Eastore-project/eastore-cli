@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"strings"
 
@@ -19,6 +20,7 @@ type DealClient struct {
 	contractAddr common.Address
 	auth         *bind.TransactOpts
 	abi          abi.ABI
+	privateKey   *ecdsa.PrivateKey
 }
 
 func NewDealClient(rpcURL, contractAddress, privateKey string) (*DealClient, error) {
@@ -56,5 +58,20 @@ func NewDealClient(rpcURL, contractAddress, privateKey string) (*DealClient, err
 		contractAddr: addr,
 		auth:         auth,
 		abi:          parsedABI,
+		privateKey:   privateKeyECDSA,
 	}, nil
+}
+
+// SignMessage signs a message with the client's private key and returns the signature
+func (c *DealClient) SignMessage(message string) ([]byte, error) {
+	// Create hash of the message
+	msgHash := crypto.Keccak256Hash([]byte(message))
+
+	// Sign the hash with the private key
+	signature, err := crypto.Sign(msgHash.Bytes(), c.privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign message: %w", err)
+	}
+
+	return signature, nil
 }

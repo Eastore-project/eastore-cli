@@ -38,6 +38,8 @@ func main() {
 		Commands: []*cli.Command{
 			commands.VersionCommand(version),
 			commands.MakeDealCommand(),
+			commands.EncryptCommand(),
+			commands.DecryptCommand(),
 		},
 	}
 

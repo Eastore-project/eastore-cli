@@ -131,7 +131,6 @@ func makeDealAction(cCtx *cli.Context) error {
 		cCtx.String("outdir"),
 		config,
 	)
-	fmt.Println(prepResult)
 	if err != nil {
 		return fmt.Errorf("failed to prepare data: %w", err)
 	}
