@@ -4,6 +4,7 @@ package encryption
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -23,17 +24,24 @@ func EncryptData(data []byte, signature []byte) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("failed to create AES cipher: %w", err)
 	}
 
-	// Create deterministic IV by hashing the key
-	iv := deriveIVFromKey(key)
+	// // Create deterministic IV by hashing the key
+	// iv := deriveIVFromKey(key)
 
-	// Create cipher stream
+	// Generate random IV
+	iv := make([]byte, aes.BlockSize)
+	if _, err := rand.Read(iv); err != nil {
+		return nil, "", fmt.Errorf("failed to generate IV: %w", err)
+	}
+
+	// Allocate buffer for IV + ciphertext
+	ciphertext := make([]byte, aes.BlockSize+len(data))
+
+	// Copy IV to the beginning
+	copy(ciphertext[:aes.BlockSize], iv)
+
+	// Encrypt directly into the buffer after the IV
 	stream := cipher.NewCTR(block, iv)
-
-	// Allocate ciphertext buffer
-	ciphertext := make([]byte, len(data))
-
-	// Encrypt data
-	stream.XORKeyStream(ciphertext, data)
+	stream.XORKeyStream(ciphertext[aes.BlockSize:], data)
 
 	// Return base64 encoded for string compatibility
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(ciphertext)))

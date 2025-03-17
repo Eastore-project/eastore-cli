@@ -40,23 +40,24 @@ func DecryptDataWithKey(encryptedData []byte, key []byte) ([]byte, error) {
 		decoded = encryptedData
 	}
 
-	// Create a new AES cipher block
+	// Extract IV from the beginning
+	iv := decoded[:aes.BlockSize]
+	actualCiphertext := decoded[aes.BlockSize:]
+
+	// Create cipher and decrypt
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
 	}
 
-	// Derive the same deterministic IV
-	iv := deriveIVFromKey(key)
-
 	// Create cipher stream
 	stream := cipher.NewCTR(block, iv)
 
 	// Allocate plaintext buffer
-	plaintext := make([]byte, len(decoded))
+	plaintext := make([]byte, len(actualCiphertext))
 
 	// Decrypt data
-	stream.XORKeyStream(plaintext, decoded)
+	stream.XORKeyStream(plaintext, actualCiphertext)
 
 	return plaintext, nil
 }
