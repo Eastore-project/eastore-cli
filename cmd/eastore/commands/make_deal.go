@@ -3,9 +3,12 @@ package commands
 import (
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 
 	"github.com/eastore-project/eastore/pkg/chain"
 	"github.com/eastore-project/eastore/pkg/contract"
+	"github.com/eastore-project/eastore/pkg/encryption"
 	"github.com/eastore-project/eastore/pkg/types"
 	"github.com/eastore-project/fildeal/src/buffer"
 	dealutils "github.com/eastore-project/fildeal/src/deal/utils"
@@ -22,6 +25,7 @@ const (
 	DefaultSkipIPNI             = false
 	DefaultRemoveUnsealed       = false
 	DefaultVerifiedDeal         = true
+	DefaultEncrypted            = false
 )
 
 // MakeDealCommand returns the CLI command for making a new deal
@@ -37,10 +41,9 @@ func MakeDealCommand() *cli.Command {
 				EnvVars:  []string{"INPUT_PATH"},
 			},
 			&cli.StringFlag{
-				Name:     "outdir",
-				Required: true,
-				Usage:    "Output directory for CAR files",
-				EnvVars:  []string{"OUT_DIR"},
+				Name:    "outdir",
+				Usage:   "Output directory for CAR files (if not provided, uses temp dir and cleans up after)",
+				EnvVars: []string{"OUT_DIR"},
 			},
 			&cli.StringFlag{
 				Name:    "buffer-type",
@@ -112,12 +115,92 @@ func MakeDealCommand() *cli.Command {
 				Value:   DefaultVerifiedDeal,
 				EnvVars: []string{"VERIFIED_DEAL"},
 			},
+			&cli.BoolFlag{
+				Name:    "encrypted",
+				Usage:   "Whether to encrypt the file before making the deal (default: false)",
+				Value:   DefaultEncrypted,
+				EnvVars: []string{"ENCRYPTED"},
+			},
+			&cli.StringFlag{
+				Name:    "encrypted-out-dir",
+				Usage:   "Output directory for encrypted files (if not provided, uses temp dir and cleans up after)",
+				EnvVars: []string{"ENCRYPTED_OUT_DIR"},
+			},
 		},
 		Action: makeDealAction,
 	}
 }
 
 func makeDealAction(cCtx *cli.Context) error {
+	inputPath := cCtx.String("input")
+	outDir := cCtx.String("outdir")
+	isEncrypted := cCtx.Bool("encrypted")
+	encryptedOutDir := cCtx.String("encrypted-out-dir")
+
+	// Handle temporary directories
+	useTempMain := outDir == ""
+	useTempEncrypted := encryptedOutDir == ""
+	var tempDirs []string
+	var err error
+
+	// Setup main output directory
+	if useTempMain {
+		outDir, err = os.MkdirTemp("", "eastore-deal-*")
+		if err != nil {
+			return fmt.Errorf("failed to create temporary directory: %w", err)
+		}
+		tempDirs = append(tempDirs, outDir)
+	} else {
+		if err := os.MkdirAll(outDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+	}
+
+	// Clean up temporary directories on exit
+	defer func() {
+		for _, dir := range tempDirs {
+			os.RemoveAll(dir)
+		}
+	}()
+
+	// If encryption is requested, encrypt the file first
+	if isEncrypted {
+		privateKey := cCtx.String("private-key")
+
+		// Setup encrypted output directory
+		if useTempEncrypted {
+			encryptedOutDir, err = os.MkdirTemp("", "eastore-encrypt-*")
+			if err != nil {
+				return fmt.Errorf("failed to create temporary encryption directory: %w", err)
+			}
+			tempDirs = append(tempDirs, encryptedOutDir)
+		} else {
+			if err := os.MkdirAll(encryptedOutDir, 0755); err != nil {
+				return fmt.Errorf("failed to create encrypted output directory: %w", err)
+			}
+		}
+
+		// Use the EncryptFile function
+		encryptedData, hexKey, err := encryption.EncryptFile(inputPath, privateKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt file: %w", err)
+		}
+
+		// Write encrypted file
+		encryptedFilePath := filepath.Join(encryptedOutDir, "encrypted_"+filepath.Base(inputPath))
+		if err := os.WriteFile(encryptedFilePath, encryptedData, 0644); err != nil {
+			return fmt.Errorf("failed to write encrypted file: %w", err)
+		}
+
+		fmt.Printf("File encrypted successfully with key: %s\n", hexKey)
+		if !useTempEncrypted {
+			fmt.Printf("Encrypted file directory: %s\n", encryptedOutDir)
+		}
+
+		// Update input path to use encrypted file for the deal
+		inputPath = encryptedFilePath
+	}
+
 	// Create data prep config
 	config := &buffer.Config{
 		Type:    cCtx.String("buffer-type"),
@@ -127,8 +210,8 @@ func makeDealAction(cCtx *cli.Context) error {
 
 	// Prepare data using our dataprep package
 	prepResult, err := dealutils.PrepareData(
-		cCtx.String("input"),
-		cCtx.String("outdir"),
+		inputPath,
+		outDir,
 		config,
 	)
 	if err != nil {

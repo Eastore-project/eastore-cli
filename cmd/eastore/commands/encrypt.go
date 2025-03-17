@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/eastore-project/eastore/pkg/encryption"
-	"github.com/eastore-project/eastore/pkg/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -36,41 +35,20 @@ func EncryptCommand() *cli.Command {
 func encryptAction(cCtx *cli.Context) error {
 	inputPath := cCtx.String("input")
 	outDir := cCtx.String("out-dir")
-
-	// Get global flags
 	privateKey := cCtx.String("private-key")
+
+	// Use the EncryptFile function
+	encryptedData, hexKey, err := encryption.EncryptFile(inputPath, privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt file: %w", err)
+	}
 
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Calculate file CID
-	fileCID, err := utils.CalculateFileCID(inputPath)
-	if err != nil {
-		return fmt.Errorf("failed to calculate file CID: %w", err)
-	}
-	cidStr := fileCID.String()
-
-	// Sign the message to derive the encryption key
-	signature, err := utils.SignMessage(privateKey, cidStr)
-	if err != nil {
-		return fmt.Errorf("failed to sign message: %w", err)
-	}
-
-	// Read input file
-	fileData, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("failed to read input file: %w", err)
-	}
-
-	// Encrypt the file
-	encryptedData, hexKey, err := encryption.EncryptData(fileData, signature)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt data: %w", err)
-	}
-
-	// Write encrypted file directly to the output directory
+	// Write the encrypted file
 	encryptedFilePath := filepath.Join(outDir, "encrypted_"+filepath.Base(inputPath))
 	if err := os.WriteFile(encryptedFilePath, encryptedData, 0644); err != nil {
 		return fmt.Errorf("failed to write encrypted file: %w", err)
@@ -78,10 +56,8 @@ func encryptAction(cCtx *cli.Context) error {
 
 	fmt.Printf("File encrypted successfully\n")
 	fmt.Printf("Original file: %s\n", inputPath)
-	fmt.Printf("File CID: %s\n", cidStr)
 	fmt.Printf("Derived key: %s\n", hexKey)
 	fmt.Printf("Encrypted file: %s\n", encryptedFilePath)
-	fmt.Printf("Output directory: %s\n", outDir)
 
 	return nil
 }

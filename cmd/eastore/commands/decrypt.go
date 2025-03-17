@@ -47,9 +47,7 @@ func decryptAction(cCtx *cli.Context) error {
 	keyHex := cCtx.String("key")
 
 	// Support both raw hex and hex starting with 0x
-	if strings.HasPrefix(keyHex, "0x") {
-		keyHex = keyHex[2:]
-	}
+	keyHex = strings.TrimPrefix(keyHex, "0x")
 
 	// Decode the hex-encoded key
 	key, err := hex.DecodeString(keyHex)
